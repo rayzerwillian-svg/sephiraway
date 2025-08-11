@@ -4,14 +4,20 @@
   - Backend: Pages Functions (Workers) com streaming p/ ChatGPT
   - Banco: Cloudflare D1 (SQLite) p/ sessões, mensagens e diretrizes (guidelines)
 
-  Como usar (resumo):
+  ⚠️ Deploy no Cloudflare Pages (sem erro de 'vite: not found')
+  1) Garanta que este repositório contém: package.json, vite.config.ts, functions/*, schema.sql, src/* e (opcional) wrangler.toml.
+  2) No Cloudflare Pages → Build settings:
+     - Build command: **npm run build**
+     - Output directory: **dist**
+  3) Project → Settings → Functions → D1 Databases: adicione binding **DB** apontando para seu D1.
+  4) Project → Settings → Environment variables: **OPENAI_API_KEY**.
+  5) (Local) Dev: `npx wrangler pages dev --d1=DB --binding OPENAI_API_KEY=sk-...`
+
+  Como usar (CLI resumido):
   1) npm i
-  2) Crie o DB D1: npx wrangler d1 create sephiraway-db
-  3) Anote o database_id retornado e coloque no wrangler.toml
-  4) Popule o schema: npx wrangler d1 execute sephiraway-db --file=./schema.sql
-  5) Defina OPENAI_API_KEY no Pages (ou em dev: wrangler pages dev --binding OPENAI_API_KEY=...)
-  6) Dev local: npx wrangler pages dev --d1=DB
-  7) Deploy: git push + Pages Project (build: vite build; output: dist)
+  2) npx wrangler d1 create sephiraway-db → copie o database_id para wrangler.toml
+  3) npx wrangler d1 execute sephiraway-db --file=./schema.sql
+  4) npx wrangler pages dev --d1=DB --binding OPENAI_API_KEY=sk-...
 */
 
 // package.json
@@ -362,3 +368,51 @@ export const onRequest: PagesFunction<{ DB: D1Database }> = async (ctx) => {
     return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 };
+
+// README.md
+# SephiraWay — Cloudflare Pages + Functions + D1 (FREE)
+
+Este repositório está pronto para deploy **100% gratuito** no Cloudflare Pages com Functions (Workers) e D1.
+
+## Estrutura
+- **Vite + React** (frontend estático → `dist`)
+- **Pages Functions** em `functions/`:
+  - `/diagnostic` → gera diagnóstico (200–250 palavras) e salva no D1
+  - `/chat-mentor` → chat com **streaming** + grava histórico no D1
+  - `/test-schema` → checagem rápida das seeds
+- **D1**: `schema.sql` (tabelas + seeds de diretrizes)
+
+## Passo a passo (produção – Cloudflare Pages)
+1. **Conecte seu repositório** no Pages.
+2. **Build settings** → *muito importante*:
+   - Build command: `npm run build`
+   - Output directory: `dist`
+3. **Functions → D1 Databases**: adicione um binding chamado **DB**, apontando para seu banco `sephiraway-db` (criado via Wrangler).
+4. **Environment Variables**: adicione `OPENAI_API_KEY`.
+5. **Deploy**.
+6. Teste: acesse `/test-schema` para ver `{ ok: true, total: 10 }`.
+
+## Passo a passo (local – dev)
+```bash
+npm i
+npx wrangler d1 create sephiraway-db
+# copie o database_id para wrangler.toml
+npx wrangler d1 execute sephiraway-db --file=./schema.sql
+# inicie dev com DB e variável de ambiente
+npx wrangler pages dev --d1=DB --binding OPENAI_API_KEY=sk-...
+```
+Abra `http://localhost:8788`.
+
+## Troubleshooting
+- **"vite: not found"**: No Pages, configure **Build command = npm run build** (não "vite build").
+- **"No wrangler.toml file found"**: não é obrigatório para Pages em produção, mas facilite o dev local mantendo este arquivo versionado (já incluído aqui).
+- **OpenAI 401/403**: verifique `OPENAI_API_KEY` nas variáveis do projeto (produção) e `--binding` no dev.
+- **DB não encontrado nas Functions**: confira que o binding se chama **DB** e aponta para o D1 correto.
+
+## Expectativa de comportamento
+- `/diagnostic` retorna JSON `{ diagnostico, session_id }` e grava a primeira mensagem do `assistant`.
+- `/chat-mentor` responde em `text/plain` **streaming** (tokens parciais) e, ao final, grava a resposta inteira.
+- Histórico fica em `chat_sessions` e `chat_messages`.
+
+Se quiser, peça que eu adicione uma rota `/history/:session_id` para listar mensagens — deixei o schema pronto para isso.
+
